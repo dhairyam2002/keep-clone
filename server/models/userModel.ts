@@ -1,59 +1,57 @@
-import {Sequelize, Model, DataTypes, Optional} from 'sequelize';
+import {Sequelize, Model, DataTypes, CreationOptional, InferAttributes, InferCreationAttributes} from 'sequelize';
 import {sequelize} from '../config/database';
+import bcrypt from 'bcryptjs';
 
 
-interface UserAttributes {
-    id: number;
-    name: string;
-    email : string;
-    password: string;
-    lastLogin : Date;
+interface UserModel extends Model<InferAttributes<UserModel>, InferCreationAttributes<UserModel>> {
+    id: CreationOptional<number>
+    name: string,
+    email: string,
+    password: string
 }
 
-
-export interface UserInput extends Optional<UserAttributes, 'id' | 'lastLogin'> {}
-export interface UserOutput extends Required<UserAttributes> {}
-
-class User extends Model<UserAttributes, UserInput> implements UserAttributes {
-    public id! : number
-    public name!: string
-    public email! : string
-    public password! : string
-    public lastLogin! : Date
-}
-
-User.init({
-    id: {
+const User = sequelize.define<UserModel>('User', {
+    id : {
+        primaryKey: true,
         type: DataTypes.INTEGER,
-        autoIncrement: true,
-        primaryKey: true
+        autoIncrement: true
     },
     name : {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: false
     },
-    email: {
+    email : {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true
+        unique: true,
+        validate: {
+            isEmail: true
+        }
     },
     password: {
         type: DataTypes.STRING,
         allowNull: false,
-    },
-    lastLogin: {
-        type: DataTypes.DATE,
+        validate : {
+            len : [6,12]
+        }
     }
-
 }, {
-    timestamps: true,
-    sequelize,
-    paranoid: true
+    freezeTableName: true,
+    hooks : {
+        beforeCreate : async (user) => {
+            const salt = await bcrypt.genSalt(10)
+            user.password = await bcrypt.hash(user.password, salt);
+        }
+    }
 })
 
-const initializeUserTable = async () => {
-    await User.sync({alter : true});
+User.prototype.validPassword = async function(password : string) {
+    return await bcrypt.compare(password, this.password);
+}
+const initUser = async () => {
+    await User.sync({alter: true});
 }
 
-initializeUserTable();
+initUser();
+
 export default User;
